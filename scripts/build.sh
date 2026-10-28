@@ -12,6 +12,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp "$BIN/Stasi" "$APP/Contents/MacOS/Stasi"
 
 # A stable signing identity keeps the TCC grant (and the app's identity) stable
