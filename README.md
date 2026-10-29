@@ -144,3 +144,7 @@ output was silent, so nothing on the audio thread ran.
   that the device-change test exercised.
 - A real multi-hour take, and the 4 GiB ceiling at production settings.
 
+
+## License
+
+MIT — see [LICENSE](LICENSE).

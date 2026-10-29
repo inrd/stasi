@@ -66,7 +66,7 @@ final class SystemAudioTap: @unchecked Sendable {
 
         var aggregate: [String: Any] = [
             kAudioAggregateDeviceNameKey: "Stasi Aggregate",
-            kAudioAggregateDeviceUIDKey: "app.stasi.recorder.aggregate.\(UUID().uuidString)",
+            kAudioAggregateDeviceUIDKey: "com.ineardisplay.stasi.aggregate.\(UUID().uuidString)",
             kAudioAggregateDeviceIsPrivateKey: 1,
             kAudioAggregateDeviceIsStackedKey: 0,
             kAudioAggregateDeviceTapAutoStartKey: 1,

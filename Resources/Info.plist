@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>Stasi</string>
 	<key>CFBundleIdentifier</key>
-	<string>app.stasi.recorder</string>
+	<string>com.ineardisplay.stasi</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>

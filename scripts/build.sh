@@ -26,10 +26,10 @@ fi
 
 if [[ -n "$IDENTITY" ]]; then
 	codesign --force --options runtime --timestamp \
-		--sign "$IDENTITY" --identifier app.stasi.recorder "$APP"
+		--sign "$IDENTITY" --identifier com.ineardisplay.stasi "$APP"
 	echo "signed: $IDENTITY"
 else
-	codesign --force --sign - --identifier app.stasi.recorder "$APP"
+	codesign --force --sign - --identifier com.ineardisplay.stasi "$APP"
 	echo "signed: ad-hoc (no identity found; set SIGN_IDENTITY to choose one)"
 fi
 

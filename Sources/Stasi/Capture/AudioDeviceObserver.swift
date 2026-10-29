@@ -15,7 +15,7 @@ import Foundation
 final class AudioDeviceObserver {
     /// Set once at init, so the listener never races with a reassignment.
     private let onChange: @MainActor @Sendable (String?) -> Void
-    private let queue = DispatchQueue(label: "app.stasi.device-observer")
+    private let queue = DispatchQueue(label: "com.ineardisplay.stasi.device-observer")
 
     /// Main thread only.
     private var address = AudioObjectPropertyAddress(

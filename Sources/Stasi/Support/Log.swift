@@ -4,7 +4,7 @@ import os
 /// Logs to both the unified log and `~/Library/Logs/Stasi/stasi.log`.
 /// The file is what you want when a menu bar app fails silently.
 enum Log {
-    private static let logger = Logger(subsystem: "app.stasi.recorder", category: "stasi")
+    private static let logger = Logger(subsystem: "com.ineardisplay.stasi", category: "stasi")
     private static let lock = NSLock()
 
     static let directory = FileManager.default.homeDirectoryForCurrentUser

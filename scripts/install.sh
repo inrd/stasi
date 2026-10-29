@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 DEST="/Applications/Stasi.app"
 
 # Quit a running copy so the bundle can be replaced cleanly.
-osascript -e 'tell application id "app.stasi.recorder" to quit' >/dev/null 2>&1 || true
+osascript -e 'tell application id "com.ineardisplay.stasi" to quit' >/dev/null 2>&1 || true
 sleep 1
 
 rm -rf "$DEST"
