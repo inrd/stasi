@@ -29,7 +29,9 @@ final class RecorderModel: ObservableObject {
     private var ticker: Timer?
     private var quitHandler: (() -> Void)?
 
-    private let deviceObserver = AudioDeviceObserver()
+    private lazy var deviceObserver = AudioDeviceObserver { [weak self] uid in
+        self?.outputDeviceChanged(to: uid)
+    }
     private var restartAfterSave = false
     private var pendingNote: String?
     private var lastDiskCheck = Date.distantPast
@@ -239,11 +241,6 @@ final class RecorderModel: ObservableObject {
     // MARK: System events
 
     private func startDeviceObserver() {
-        deviceObserver.onChange = { [weak self] uid in
-            Task { @MainActor [weak self] in
-                self?.outputDeviceChanged(to: uid)
-            }
-        }
         deviceObserver.start()
     }
 

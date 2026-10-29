@@ -108,6 +108,17 @@ open -n build/Stasi.app --args --auto-record 20 --max-wav-bytes 2000000
 `--max-wav-bytes` lowers the rollover threshold so the segment-splitting path
 can be tested in seconds instead of hours.
 
+### Thread Sanitizer
+
+```sh
+./scripts/tsan.sh 15
+```
+
+Builds a separate sanitized bundle (`build/Stasi-TSan.app`), records for the
+given number of seconds while playing a system sound, and fails if TSan reports
+a race. Playback matters: in testing, the tap delivered no callbacks while the
+output was silent, so nothing on the audio thread ran.
+
 ## Verified
 
 - Capture → WAV → normalize hits −1.0 dBFS exactly (ffmpeg `volumedetect`).

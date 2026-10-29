@@ -63,3 +63,24 @@ Two things are wrong with it:
 
 Rule: never probe for EOF with a full-size read. Bound loops with
 `input.length` and `input.framePosition`.
+
+## Threading
+
+Four classes cross the audio/main boundary. `StatsBox` is a plain `Sendable`
+class and `AudioDeviceObserver` is main-actor isolated, so both are checked by
+the compiler. `TempFloatWriter` and `SystemAudioTap` remain `@unchecked
+Sendable` and rely on these rules:
+
+- `SystemAudioTap.start()` and `stop()` are never concurrent and never run on
+  the audio thread. `handleIO` is the only audio-thread entry point, and it
+  touches only `firstBuffer`, `stats` and `writer`.
+- `TempFloatWriter.file` is opened before the IOProc exists and disposed after
+  `AudioDeviceStop`, so only the audio thread reads it while capture runs.
+- Progress and failure state (`StatsBox`, `TempFloatWriter.progress`) live
+  behind `OSAllocatedUnfairLock`. Do not add a mutable property that both
+  threads touch.
+- `AudioDeviceObserver` is main-actor isolated; the HAL listener block reads the
+  device UID on its own queue and hops to the main actor before comparing it.
+
+A take should be recorded with `./scripts/tsan.sh` after touching any of them:
+TSan catches the races the compiler cannot see.

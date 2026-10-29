@@ -8,7 +8,7 @@ struct CaptureStats {
 }
 
 /// Written on the Core Audio thread, read on the main thread.
-final class StatsBox: @unchecked Sendable {
+final class StatsBox: Sendable {
     private let lock = OSAllocatedUnfairLock(initialState: CaptureStats())
 
     func record(peak: Float, frames: Int64) {

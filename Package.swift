@@ -11,6 +11,5 @@ let package = Package(
             name: "Stasi",
             path: "Sources/Stasi"
         )
-    ],
-    swiftLanguageModes: [.v5]
+    ]
 )

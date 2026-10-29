@@ -6,18 +6,34 @@ import Foundation
 ///
 /// An aggregate device is required to read a tap. The default output device is
 /// included as the clock source; the tap itself contributes the input stream.
+///
+/// Threading rules, enforced by convention rather than the compiler:
+/// - `start()` and `stop()` are never concurrent, and never run on the audio
+///   thread.
+/// - `handleIO` runs on the Core Audio thread and touches only `firstBuffer`,
+///   `writer` and `stats`.
+/// - Everything else is read/written on the starting thread, before the IOProc
+///   exists or after it has been stopped.
 final class SystemAudioTap: @unchecked Sendable {
+    /// Written by `start`, cleared by `stop`; only those two methods use it.
     private(set) var tapID = AudioObjectID(kAudioObjectUnknown)
+    /// Written by `start`, cleared by `stop`; only those two methods use it.
     private(set) var aggregateID = AudioObjectID(kAudioObjectUnknown)
+    /// Written by `start` before the IOProc exists; read only by `start`.
     private(set) var tapFormat = AudioStreamBasicDescription()
 
+    /// Written on the audio thread, read on the main thread. Internally locked.
     let stats = StatsBox()
 
+    /// Written by `start`, cleared by `stop`; only those two methods use it.
     private var procID: AudioDeviceIOProcID?
+    /// Prepared before the IOProc exists, then written by the audio thread.
+    /// Internally locked, except for the file handle, which only the audio
+    /// thread reads while capture runs.
     private let writer: TempFloatWriter
 
-    /// Recorded on the audio thread without logging; written to the log when
-    /// capture stops, so the callback never does file I/O.
+    /// Audio thread only. Read by `stop` after `AudioDeviceStop`, which
+    /// guarantees the callback can no longer run.
     private var firstBuffer: (count: Int, channels: UInt32, bytes: UInt32)?
 
     init(writer: TempFloatWriter) {
