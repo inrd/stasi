@@ -46,8 +46,6 @@ final class TempFloatWriter: @unchecked Sendable {
     }
 
     private struct Progress: Sendable {
-        var framesWritten: Int64 = 0
-        var droppedFrames: Int64 = 0
         var failed = false
         var failureOperation: FailureOperation?
         var failureStatus: OSStatus = noErr
@@ -55,12 +53,6 @@ final class TempFloatWriter: @unchecked Sendable {
 
     /// Written by the audio thread, read by the main thread and by `close`.
     private let progress = OSAllocatedUnfairLock(initialState: Progress())
-
-    var framesWritten: Int64 { progress.withLock { $0.framesWritten } }
-
-    /// Frames discarded because the disk could not keep up. Non-zero means the
-    /// take is missing audio.
-    var droppedFrames: Int64 { progress.withLock { $0.droppedFrames } }
 
     var lastError: String? {
         // Copy the failure under the lock; build the message outside it, so a
@@ -122,42 +114,30 @@ final class TempFloatWriter: @unchecked Sendable {
     /// background thread. Nothing here may allocate, log or touch the file.
     func write(list: UnsafeMutableAudioBufferListPointer, frames: UInt32) {
         guard frames > 0 else { return }
-        guard let file else {
-            drop(frames)
-            return
-        }
-        guard !progress.withLock({ $0.failed }) else {
-            drop(frames)
-            return
-        }
+        guard let file else { return }
+        guard !progress.withLock({ $0.failed }) else { return }
 
         let status = ExtAudioFileWriteAsync(file, frames, list.unsafeMutablePointer)
-        progress.withLock { state in
-            guard status == noErr else {
-                // Failures from earlier writes surface on later calls. An
-                // overflow only means the disk fell behind: count the gap and
-                // keep going, since the writer recovers once the disk catches
-                // up. Do not dispose the file here; that would flush it on the
-                // audio thread.
-                //
-                // `AsyncWriteTooLarge` is not temporary: the write exceeds the
-                // internal buffer, so every callback would fail the same way
-                // and the whole take would be lost. Record it as a permanent
-                // failure so the message names the real problem.
-                if status != kExtAudioFileError_AsyncWriteBufferOverflow {
-                    state.failed = true
-                    state.failureOperation = .asyncWrite
-                    state.failureStatus = status
-                }
-                state.droppedFrames += Int64(frames)
-                return
-            }
-            state.framesWritten += Int64(frames)
-        }
-    }
+        guard status != noErr else { return }
 
-    private func drop(_ frames: UInt32) {
-        progress.withLock { $0.droppedFrames += Int64(frames) }
+        // Failures from earlier writes surface on later calls. An overflow only
+        // means the disk fell behind, and the writer recovers once it catches
+        // up. Do not dispose the file here; that would flush it on the audio
+        // thread.
+        //
+        // `AsyncWriteTooLarge` is not temporary: the write exceeds the internal
+        // buffer, so every callback would fail the same way and the whole take
+        // would be lost. Record it as a permanent failure so the message names
+        // the real problem.
+        //
+        // Neither case can tell from this call whether these frames were
+        // queued, so the final loss is measured from the file in `close`.
+        guard status != kExtAudioFileError_AsyncWriteBufferOverflow else { return }
+        progress.withLock { state in
+            state.failed = true
+            state.failureOperation = .asyncWrite
+            state.failureStatus = status
+        }
     }
 
     private func open() -> ExtAudioFileRef? {
@@ -215,19 +195,18 @@ final class TempFloatWriter: @unchecked Sendable {
         }
     }
 
-    func close() {
-        guard let file else { return }
+    /// Closes the file and returns how many frames it actually contains, or
+    /// nil if they could not be read back.
+    @discardableResult
+    func close() -> Int64? {
+        guard let file else { return nil }
         self.file = nil
         // Disposing flushes writes still queued by ExtAudioFileWriteAsync.
         ExtAudioFileDispose(file)
 
-        // An async buffer overflow is not always reported, so check what
-        // actually reached the file rather than trusting the accepted count.
-        let written = framesWritten
-        if let onDisk = Self.frameCount(of: url), onDisk < written {
-            progress.withLock { $0.droppedFrames += written - onDisk }
-        }
-        Log.info("temp closed frames=\(written) dropped=\(droppedFrames)")
+        let onDisk = Self.frameCount(of: url)
+        Log.info("temp closed onDisk=\(onDisk.map(String.init) ?? "unknown")")
+        return onDisk
     }
 
     private static func frameCount(of url: URL) -> Int64? {

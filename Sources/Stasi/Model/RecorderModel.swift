@@ -222,8 +222,17 @@ final class RecorderModel: ObservableObject {
         Log.info("stopping after \(String(format: "%.2f", elapsed))s" + (note.map { " (\($0))" } ?? ""))
 
         tap?.stop()
-        writer?.close()
-        droppedFramesAtSave = writer?.droppedFrames ?? 0
+        // `stats.frames` counts every frame the callback received, including
+        // any the writer could not queue. The file is the only reliable record
+        // of what survived, so the loss is simply the difference.
+        let receivedFrames = tap?.stats.snapshot().frames ?? 0
+        let onDiskFrames = writer?.close()
+        droppedFramesAtSave = onDiskFrames.map { max(0, receivedFrames - $0) } ?? 0
+        Log.info(
+            "capture frames received=\(receivedFrames) "
+                + "onDisk=\(onDiskFrames.map(String.init) ?? "unknown") "
+                + "dropped=\(droppedFramesAtSave)"
+        )
         writeErrorAtSave = writer?.lastError
         beginNormalize()
     }
@@ -293,10 +302,6 @@ final class RecorderModel: ObservableObject {
 
         if let writeError = writer?.lastError {
             warning = "File write failed: \(writeError)"
-        } else if let dropped = writer?.droppedFrames, dropped > 0 {
-            // Async writes buffer on a background thread; a disk stall long
-            // enough to overflow that buffer costs these frames, not the take.
-            warning = "Audio dropped — the disk could not keep up (\(dropped) frames)."
         } else if stats.peak == 0, elapsed > 2.5, stats.frames > 0 {
             warning = "Silence — if audio is playing, grant System Audio Recording in System Settings."
         } else {

@@ -144,11 +144,3 @@ output was silent, so nothing on the audio thread ran.
   that the device-change test exercised.
 - A real multi-hour take, and the 4 GiB ceiling at production settings.
 
-## Next
-
-- **M3** — UI polish: error states, empty-state onboarding, optional global
-  hotkey, recent-takes list.
-
-Launch at login is explicitly **out of scope**. M4 (stable signing and install)
-is done.
-
