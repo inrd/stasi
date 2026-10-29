@@ -36,6 +36,7 @@ final class RecorderModel: ObservableObject {
     private var pendingNote: String?
     private var lastDiskCheck = Date.distantPast
     private var droppedFramesAtSave: Int64 = 0
+    private var writeErrorAtSave: String?
 
     /// 24-bit stereo: 6 bytes per frame.
     private let wavBytesPerFrame: Int64 = 6
@@ -169,6 +170,7 @@ final class RecorderModel: ObservableObject {
         self.lastSummary = nil
         self.elapsed = 0
         self.droppedFramesAtSave = 0
+        self.writeErrorAtSave = nil
         self.state = .starting
         if userInitiated { notice = nil }
 
@@ -222,6 +224,7 @@ final class RecorderModel: ObservableObject {
         tap?.stop()
         writer?.close()
         droppedFramesAtSave = writer?.droppedFrames ?? 0
+        writeErrorAtSave = writer?.lastError
         beginNormalize()
     }
 
@@ -346,7 +349,9 @@ final class RecorderModel: ObservableObject {
             format: "%.2f s · peak %.3f → %.3f (%+.1f dB)",
             result.duration, result.peakBefore, result.peakAfter, result.gainDB
         )
-        if droppedFramesAtSave > 0 {
+        if let writeError = writeErrorAtSave {
+            warning = "File write failed: \(writeError)"
+        } else if droppedFramesAtSave > 0 {
             warning = "Audio dropped — the disk could not keep up (\(droppedFramesAtSave) frames)."
         } else {
             warning = result.wasSilent ? "The recording was silent." : nil

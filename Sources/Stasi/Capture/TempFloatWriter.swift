@@ -139,8 +139,12 @@ final class TempFloatWriter: @unchecked Sendable {
                 // keep going, since the writer recovers once the disk catches
                 // up. Do not dispose the file here; that would flush it on the
                 // audio thread.
-                if status != kExtAudioFileError_AsyncWriteBufferOverflow,
-                   status != kExtAudioFileError_AsyncWriteTooLarge {
+                //
+                // `AsyncWriteTooLarge` is not temporary: the write exceeds the
+                // internal buffer, so every callback would fail the same way
+                // and the whole take would be lost. Record it as a permanent
+                // failure so the message names the real problem.
+                if status != kExtAudioFileError_AsyncWriteBufferOverflow {
                     state.failed = true
                     state.failureOperation = .asyncWrite
                     state.failureStatus = status
