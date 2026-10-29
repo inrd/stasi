@@ -122,7 +122,12 @@ output was silent, so nothing on the audio thread ran.
 ## Verified
 
 - Capture → WAV → normalize hits −1.0 dBFS exactly (ffmpeg `volumedetect`).
-- 24-bit / 48 kHz stereo, duration accurate to ~3 ms over 15 s.
+- 24-bit stereo at the output device's rate — 48 kHz built-in, 44.1 kHz with
+  BlackHole — with duration accurate to ~3 ms over 15 s.
+- A take **started** with BlackHole 2ch as the default output captures correctly:
+  the aggregate has one input stream (the tap), the 48 kHz tap is resampled to
+  the 44.1 kHz clock, and the 44.1 kHz file has the right duration and pitch
+  (a 2.00 s tone measured 1.98 s, not the 1.84 s the wrong rate produced).
 - Quit mid-recording finalizes and saves instead of truncating.
 - Switching the default output device mid-take finalizes and saves (tested by
   moving the default output to BlackHole 2ch and back).

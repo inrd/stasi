@@ -59,6 +59,21 @@ func readString(objectID: AudioObjectID, selector: AudioObjectPropertySelector) 
     return value.isEmpty ? nil : value
 }
 
+/// The device's running rate. For an aggregate this is the clock device's rate,
+/// which is the rate its input buffers are actually delivered at.
+func readNominalSampleRate(objectID: AudioObjectID) -> Double? {
+    var rate = Float64(0)
+    var size = UInt32(MemoryLayout<Float64>.size)
+    var address = AudioObjectPropertyAddress(
+        mSelector: kAudioDevicePropertyNominalSampleRate,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+    let status = AudioObjectGetPropertyData(objectID, &address, 0, nil, &size, &rate)
+    guard status == noErr, rate > 0 else { return nil }
+    return rate
+}
+
 func defaultOutputDeviceUID() -> String? {
     var deviceID = AudioObjectID(kAudioObjectUnknown)
     var size = UInt32(MemoryLayout<AudioObjectID>.size)

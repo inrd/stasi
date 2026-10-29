@@ -5,7 +5,8 @@ import Foundation
 /// Captures the system's output through a Core Audio process tap.
 ///
 /// An aggregate device is required to read a tap. The default output device is
-/// included as the clock source; the tap itself contributes the input stream.
+/// used as the clock source (as a clock device only, so its own inputs never
+/// appear in the aggregate); the tap contributes the only input stream.
 ///
 /// Threading rules, enforced by convention rather than the compiler:
 /// - `start()` and `stop()` are never concurrent, and never run on the audio
@@ -76,8 +77,13 @@ final class SystemAudioTap: @unchecked Sendable {
         ]
 
         if let outputUID = defaultOutputDeviceUID() {
-            aggregate[kAudioAggregateDeviceMainSubDeviceKey] = outputUID
-            aggregate[kAudioAggregateDeviceSubDeviceListKey] = [[kAudioSubDeviceUIDKey: outputUID]]
+            // Use the output device as a clock only. Listing it as a sub-device
+            // also pulls its input streams into the aggregate: with a device
+            // that has inputs (BlackHole, an interface), input stream 0 is the
+            // device, not the tap, and the file format and `handleIO` both pick
+            // the wrong stream. A clock device contributes no streams.
+            aggregate[kAudioAggregateDeviceClockDeviceKey] = outputUID
+            aggregate[kAudioAggregateDeviceSubDeviceListKey] = []
         } else {
             aggregate[kAudioAggregateDeviceSubDeviceListKey] = []
             Log.error("no default output device; aggregate has no clock source")
@@ -92,15 +98,18 @@ final class SystemAudioTap: @unchecked Sendable {
         }
         aggregateID = aggregateIDValue
 
-        // The callback's buffers follow the aggregate's input format, which may
-        // differ from the tap format (the aggregate resamples to its clock
-        // device). Open the file and prime async writing here, before the
-        // IOProc exists, so the audio thread never does file I/O.
-        let ioFormat = readASBD(
+        // The callback's buffers follow the aggregate's input format. The tap
+        // keeps its native rate in that format even when the aggregate's clock
+        // device runs at another rate (the aggregate then resamples), so the
+        // rate to write at is the device's nominal rate, not the stream's.
+        var ioFormat = readASBD(
             objectID: aggregateID,
             selector: kAudioDevicePropertyStreamFormat,
             scope: kAudioObjectPropertyScopeInput
         ) ?? tapFormat
+        if let clockRate = readNominalSampleRate(objectID: aggregateID) {
+            ioFormat.mSampleRate = clockRate
+        }
         Log.info("capture format \(describe(ioFormat))")
 
         guard writer.prepare(format: ioFormat) else {

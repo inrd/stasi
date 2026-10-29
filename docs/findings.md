@@ -21,6 +21,22 @@ incorrectly.
   independent of how loud the speakers were — good for sampling.
 - Float headroom above 0 dBFS survives capture (one take peaked at 1.3079), so
   normalization can reduce gain instead of clipping.
+- **The aggregate's input streams are the sub-devices' inputs first, then the
+  taps.** Listing the output device in `kAudioAggregateDeviceSubDeviceListKey`
+  therefore puts its inputs ahead of the tap: with BlackHole 2ch as the default
+  output, input stream 0 is BlackHole's input, not the tap. Both
+  `kAudioDevicePropertyStreamFormat` (input scope) and IOProc buffer 0 then pick
+  the wrong stream. The take failed outright: `buffers=2` and every
+  `ExtAudioFileWriteAsync` was rejected, leaving an empty CAF.
+  `kAudioSubDeviceInputChannelsKey: 0` does **not** help — the HAL still reports
+  the device's full channel count. Set `kAudioAggregateDeviceClockDeviceKey` and
+  keep the sub-device list empty instead: the clock contributes no streams, so
+  the tap is the only input stream.
+- The tap keeps its native 48 kHz ASBD inside an aggregate clocked at 44.1 kHz.
+  The aggregate resamples the buffers, but the stream format still says 48 kHz.
+  Write the file at the aggregate's `kAudioDevicePropertyNominalSampleRate`
+  (the clock rate): writing 44.1 kHz frames as 48 kHz turns a 2.000 s tone into
+  1.8375 s (44.1/48) and pitches it up.
 
 ## Permissions
 
