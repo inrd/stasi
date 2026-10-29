@@ -15,7 +15,10 @@ final class SystemAudioTap: @unchecked Sendable {
 
     private var procID: AudioDeviceIOProcID?
     private let writer: TempFloatWriter
-    private var didLogLayout = false
+
+    /// Recorded on the audio thread without logging; written to the log when
+    /// capture stops, so the callback never does file I/O.
+    private var firstBuffer: (count: Int, channels: UInt32, bytes: UInt32)?
 
     init(writer: TempFloatWriter) {
         self.writer = writer
@@ -38,7 +41,6 @@ final class SystemAudioTap: @unchecked Sendable {
 
         if let format = readASBD(objectID: tap, selector: kAudioTapPropertyFormat) {
             tapFormat = format
-            writer.configure(sampleRate: format.mSampleRate)
             Log.info("tap format \(describe(format))")
         }
 
@@ -74,6 +76,22 @@ final class SystemAudioTap: @unchecked Sendable {
         }
         aggregateID = aggregateIDValue
 
+        // The callback's buffers follow the aggregate's input format, which may
+        // differ from the tap format (the aggregate resamples to its clock
+        // device). Open the file and prime async writing here, before the
+        // IOProc exists, so the audio thread never does file I/O.
+        let ioFormat = readASBD(
+            objectID: aggregateID,
+            selector: kAudioDevicePropertyStreamFormat,
+            scope: kAudioObjectPropertyScopeInput
+        ) ?? tapFormat
+        Log.info("capture format \(describe(ioFormat))")
+
+        guard writer.prepare(format: ioFormat) else {
+            stop()
+            throw StasiError("Could not open the recording file (\(writer.lastError ?? "unknown error")).")
+        }
+
         var pid: AudioDeviceIOProcID?
         status = AudioDeviceCreateIOProcIDWithBlock(&pid, aggregateID, nil) { [weak self] _, input, _, output, _ in
             self?.handleIO(input: input, output: output)
@@ -96,6 +114,15 @@ final class SystemAudioTap: @unchecked Sendable {
             AudioDeviceDestroyIOProcID(aggregateID, procID)
         }
         procID = nil
+
+        // Safe to read now that the callback can no longer run.
+        if let firstBuffer {
+            self.firstBuffer = nil
+            Log.info(
+                "first buffer buffers=\(firstBuffer.count) "
+                    + "channels=\(firstBuffer.channels) bytes=\(firstBuffer.bytes)"
+            )
+        }
 
         if aggregateID != kAudioObjectUnknown {
             AudioHardwareDestroyAggregateDevice(aggregateID)
@@ -133,9 +160,8 @@ final class SystemAudioTap: @unchecked Sendable {
         let first = list[0]
         guard let data = first.mData, first.mDataByteSize > 0 else { return }
 
-        if !didLogLayout {
-            didLogLayout = true
-            Log.info("first buffer buffers=\(list.count) channels=\(first.mNumberChannels) bytes=\(first.mDataByteSize)")
+        if firstBuffer == nil {
+            firstBuffer = (list.count, first.mNumberChannels, first.mDataByteSize)
         }
 
         let floatCount = Int(first.mDataByteSize) / MemoryLayout<Float>.size

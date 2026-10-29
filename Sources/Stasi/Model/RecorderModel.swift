@@ -33,6 +33,7 @@ final class RecorderModel: ObservableObject {
     private var restartAfterSave = false
     private var pendingNote: String?
     private var lastDiskCheck = Date.distantPast
+    private var droppedFramesAtSave: Int64 = 0
 
     /// 24-bit stereo: 6 bytes per frame.
     private let wavBytesPerFrame: Int64 = 6
@@ -165,6 +166,7 @@ final class RecorderModel: ObservableObject {
         self.warning = nil
         self.lastSummary = nil
         self.elapsed = 0
+        self.droppedFramesAtSave = 0
         self.state = .starting
         if userInitiated { notice = nil }
 
@@ -217,6 +219,7 @@ final class RecorderModel: ObservableObject {
 
         tap?.stop()
         writer?.close()
+        droppedFramesAtSave = writer?.droppedFrames ?? 0
         beginNormalize()
     }
 
@@ -290,6 +293,10 @@ final class RecorderModel: ObservableObject {
 
         if let writeError = writer?.lastError {
             warning = "File write failed: \(writeError)"
+        } else if let dropped = writer?.droppedFrames, dropped > 0 {
+            // Async writes buffer on a background thread; a disk stall long
+            // enough to overflow that buffer costs these frames, not the take.
+            warning = "Audio dropped — the disk could not keep up (\(dropped) frames)."
         } else if stats.peak == 0, elapsed > 2.5, stats.frames > 0 {
             warning = "Silence — if audio is playing, grant System Audio Recording in System Settings."
         } else {
@@ -342,7 +349,11 @@ final class RecorderModel: ObservableObject {
             format: "%.2f s · peak %.3f → %.3f (%+.1f dB)",
             result.duration, result.peakBefore, result.peakAfter, result.gainDB
         )
-        warning = result.wasSilent ? "The recording was silent." : nil
+        if droppedFramesAtSave > 0 {
+            warning = "Audio dropped — the disk could not keep up (\(droppedFramesAtSave) frames)."
+        } else {
+            warning = result.wasSilent ? "The recording was silent." : nil
+        }
         notice = pendingNote
         pendingNote = nil
         state = .idle
